@@ -7,5 +7,8 @@
     <dimen name="fab_elevation">2dp</dimen>
     <dimen name="fab_press_translation_z">6dp</dimen>
     <dimen name="fab_margin">24dp</dimen>
+    <dimen name="detail_backdrop_height">176dp</dimen>
+    <dimen name="default_padding_small">4dp</dimen>
+    <dimen name="default_padding_medium">6dp</dimen>
 
 </resources>
