@@ -7,17 +7,18 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.Loader;
 import android.database.Cursor;
+import android.graphics.Typeface;
 import android.os.Bundle;
+import android.support.design.widget.AppBarLayout;
 import android.support.design.widget.CollapsingToolbarLayout;
+import android.support.v4.content.ContextCompat;
 import android.support.v4.widget.SwipeRefreshLayout;
-import android.support.v7.app.ActionBarActivity;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.StaggeredGridLayoutManager;
 import android.support.v7.widget.Toolbar;
+import android.text.TextPaint;
 import android.text.format.DateUtils;
-import android.util.TypedValue;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -27,6 +28,8 @@ import com.example.xyzreader.data.ArticleLoader;
 import com.example.xyzreader.data.ItemsContract;
 import com.example.xyzreader.data.UpdaterService;
 
+import java.lang.reflect.Field;
+
 /**
  * An activity representing a list of Articles. This activity has different presentations for
  * handset and tablet-size devices. On handsets, the activity presents a list of items, which when
@@ -34,11 +37,24 @@ import com.example.xyzreader.data.UpdaterService;
  * activity presents a grid of items as cards.
  */
 public class ArticleListActivity extends AppCompatActivity implements
-        LoaderManager.LoaderCallbacks<Cursor> {
+        LoaderManager.LoaderCallbacks<Cursor>, AppBarLayout.OnOffsetChangedListener {
 
     private Toolbar mToolbar;
     private SwipeRefreshLayout mSwipeRefreshLayout;
     private RecyclerView mRecyclerView;
+    private AppBarLayout appBarLayout;
+    private boolean mIsRefreshing = false;
+    private CollapsingToolbarLayout mCollapsingToolbarLayout;
+
+    private BroadcastReceiver mRefreshingReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (UpdaterService.BROADCAST_ACTION_STATE_CHANGE.equals(intent.getAction())) {
+                mIsRefreshing = intent.getBooleanExtra(UpdaterService.EXTRA_REFRESHING, false);
+                updateRefreshingUI();
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,15 +62,15 @@ public class ArticleListActivity extends AppCompatActivity implements
         setContentView(R.layout.activity_article_list);
 
         mToolbar = (Toolbar) findViewById(R.id.toolbar);
+        mCollapsingToolbarLayout = (CollapsingToolbarLayout) findViewById(R.id.collapsing_toolbar);
+        mCollapsingToolbarLayout.setTitle(getResources().getString(R.string.app_name));
+        mCollapsingToolbarLayout.setCollapsedTitleTextColor(ContextCompat.getColor(ArticleListActivity.this, android.R.color.white));
+        mCollapsingToolbarLayout.setExpandedTitleColor(ContextCompat.getColor(ArticleListActivity.this, android.R.color.transparent));
+        setToolbarAttributes(mCollapsingToolbarLayout);
 
-        CollapsingToolbarLayout collapsingToolbar =
-                (CollapsingToolbarLayout) findViewById(R.id.collapsing_toolbar);
-        collapsingToolbar.setTitle(getString(R.string.app_name));
-
-        setSupportActionBar(mToolbar);
-        //final View toolbarContainerView = findViewById(R.id.toolbar_container);
 
         mSwipeRefreshLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_refresh_layout);
+        appBarLayout = (AppBarLayout) findViewById(R.id.appbar);
 
         mRecyclerView = (RecyclerView) findViewById(R.id.recycler_view);
         getLoaderManager().initLoader(0, null, this);
@@ -62,6 +78,27 @@ public class ArticleListActivity extends AppCompatActivity implements
         if (savedInstanceState == null) {
             refresh();
         }
+    }
+
+    @Override
+    public void onOffsetChanged(AppBarLayout appBarLayout, int i) {
+        if (i == 0) {
+            mSwipeRefreshLayout.setEnabled(true);
+        } else {
+            mSwipeRefreshLayout.setEnabled(false);
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        appBarLayout.addOnOffsetChangedListener(this);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        appBarLayout.removeOnOffsetChangedListener(this);
     }
 
     private void refresh() {
@@ -80,18 +117,6 @@ public class ArticleListActivity extends AppCompatActivity implements
         super.onStop();
         unregisterReceiver(mRefreshingReceiver);
     }
-
-    private boolean mIsRefreshing = false;
-
-    private BroadcastReceiver mRefreshingReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (UpdaterService.BROADCAST_ACTION_STATE_CHANGE.equals(intent.getAction())) {
-                mIsRefreshing = intent.getBooleanExtra(UpdaterService.EXTRA_REFRESHING, false);
-                updateRefreshingUI();
-            }
-        }
-    };
 
     private void updateRefreshingUI() {
         mSwipeRefreshLayout.setRefreshing(mIsRefreshing);
@@ -116,6 +141,34 @@ public class ArticleListActivity extends AppCompatActivity implements
     @Override
     public void onLoaderReset(Loader<Cursor> loader) {
         mRecyclerView.setAdapter(null);
+    }
+
+    private void setToolbarAttributes(CollapsingToolbarLayout collapsingToolbarLayout) {
+        try {
+            final Field field = collapsingToolbarLayout.getClass().getDeclaredField("mCollapsingTextHelper");
+            field.setAccessible(true);
+
+            final Object object = field.get(collapsingToolbarLayout);
+            final Field tpf = object.getClass().getDeclaredField("mTextPaint");
+            tpf.setAccessible(true);
+
+            ((TextPaint) tpf.get(object)).setTypeface(Typeface.createFromAsset(getAssets(), "RobotoSlab-Regular.ttf"));
+            ((TextPaint) tpf.get(object)).setColor(ContextCompat.getColor(ArticleListActivity.this, android.R.color.white));
+        } catch (Exception ignored) {
+        }
+    }
+
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        public DynamicHeightNetworkImageView thumbnailView;
+        public TextView titleView;
+        public TextView subtitleView;
+
+        public ViewHolder(View view) {
+            super(view);
+            thumbnailView = (DynamicHeightNetworkImageView) view.findViewById(R.id.thumbnail);
+            titleView = (TextView) view.findViewById(R.id.article_title);
+            subtitleView = (TextView) view.findViewById(R.id.article_subtitle);
+        }
     }
 
     private class Adapter extends RecyclerView.Adapter<ViewHolder> {
@@ -167,17 +220,5 @@ public class ArticleListActivity extends AppCompatActivity implements
             return mCursor.getCount();
         }
     }
-
-    public static class ViewHolder extends RecyclerView.ViewHolder {
-        public DynamicHeightNetworkImageView thumbnailView;
-        public TextView titleView;
-        public TextView subtitleView;
-
-        public ViewHolder(View view) {
-            super(view);
-            thumbnailView = (DynamicHeightNetworkImageView) view.findViewById(R.id.thumbnail);
-            titleView = (TextView) view.findViewById(R.id.article_title);
-            subtitleView = (TextView) view.findViewById(R.id.article_subtitle);
-        }
-    }
 }
+

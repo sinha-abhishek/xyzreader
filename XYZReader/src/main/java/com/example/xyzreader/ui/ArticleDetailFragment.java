@@ -4,13 +4,16 @@ import android.app.Fragment;
 import android.app.LoaderManager;
 import android.content.Intent;
 import android.content.Loader;
+import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
+import android.os.Build;
 import android.os.Bundle;
+import android.support.design.widget.CollapsingToolbarLayout;
+import android.support.design.widget.FloatingActionButton;
 import android.support.v4.app.ShareCompat;
 import android.support.v4.widget.NestedScrollView;
 import android.support.v7.graphics.Palette;
@@ -21,6 +24,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -36,18 +40,19 @@ import com.example.xyzreader.data.ArticleLoader;
  */
 public class ArticleDetailFragment extends Fragment implements
         LoaderManager.LoaderCallbacks<Cursor> {
-    private static final String TAG = "ArticleDetailFragment";
-
     public static final String ARG_ITEM_ID = "item_id";
+    private static final String TAG = "ArticleDetailFragment";
     private static final float PARALLAX_FACTOR = 1.25f;
 
     private Cursor mCursor;
     private long mItemId;
     private View mRootView;
-    private int mMutedColor = 0xFF333333;
+    private int mDarkVibrantColor = 0xFF444444;
+    private int mVibrantColor = 0xFF444444;
     private NestedScrollView mScrollView;
     private DrawInsetsFrameLayout mDrawInsetsFrameLayout;
     private ColorDrawable mStatusBarColorDrawable;
+    private CollapsingToolbarLayout mCollapsingToolbarLayout;
 
     private int mTopInset;
     private View mPhotoContainerView;
@@ -55,6 +60,8 @@ public class ArticleDetailFragment extends Fragment implements
     private int mScrollY;
     private boolean mIsCard = false;
     private int mStatusBarFullOpacityBottom;
+    private FloatingActionButton fab;
+    private int id = 0;
 
     /**
      * Mandatory empty constructor for the fragment manager to instantiate the
@@ -69,6 +76,20 @@ public class ArticleDetailFragment extends Fragment implements
         ArticleDetailFragment fragment = new ArticleDetailFragment();
         fragment.setArguments(arguments);
         return fragment;
+    }
+
+    static float progress(float v, float min, float max) {
+        return constrain((v - min) / (max - min), 0, 1);
+    }
+
+    static float constrain(float val, float min, float max) {
+        if (val < min) {
+            return min;
+        } else if (val > max) {
+            return max;
+        } else {
+            return val;
+        }
     }
 
     @Override
@@ -92,18 +113,14 @@ public class ArticleDetailFragment extends Fragment implements
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-
-        // In support library r8, calling initLoader for a fragment in a FragmentPagerAdapter in
-        // the fragment's onCreate may cause the same LoaderManager to be dealt to multiple
-        // fragments because their mIndex is -1 (haven't been added to the activity yet). Thus,
-        // we do this in onActivityCreated.
         getLoaderManager().initLoader(0, null, this);
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-            Bundle savedInstanceState) {
+                             Bundle savedInstanceState) {
         mRootView = inflater.inflate(R.layout.fragment_article_detail, container, false);
+        mCollapsingToolbarLayout = (CollapsingToolbarLayout) mRootView.findViewById(R.id.collapsing_toolbar);
         mDrawInsetsFrameLayout = (DrawInsetsFrameLayout)
                 mRootView.findViewById(R.id.draw_insets_frame_layout);
         mDrawInsetsFrameLayout.setOnInsetsCallback(new DrawInsetsFrameLayout.OnInsetsCallback() {
@@ -114,22 +131,15 @@ public class ArticleDetailFragment extends Fragment implements
         });
 
         mScrollView = (NestedScrollView) mRootView.findViewById(R.id.scrollview);
-        mScrollView.setOnScrollChangeListener(new NestedScrollView.OnScrollChangeListener() {
-            @Override
-            public void onScrollChange(NestedScrollView v, int scrollX, int scrollY, int oldScrollX, int oldScrollY) {
-//                mScrollY = mScrollView.getScrollY();
-//                getActivityCast().onUpButtonFloorChanged(mItemId, ArticleDetailFragment.this);
-//                mPhotoContainerView.setTranslationY((int) (mScrollY - mScrollY / PARALLAX_FACTOR));
-//                updateStatusBar();
-            }
-        });
 
         mPhotoView = (ImageView) mRootView.findViewById(R.id.photo);
         mPhotoContainerView = mRootView.findViewById(R.id.photo_container);
 
         mStatusBarColorDrawable = new ColorDrawable(0);
 
-        mRootView.findViewById(R.id.share_fab).setOnClickListener(new View.OnClickListener() {
+        fab = (FloatingActionButton) mRootView.findViewById(R.id.share_fab);
+
+        fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 startActivity(Intent.createChooser(ShareCompat.IntentBuilder.from(getActivity())
@@ -138,39 +148,17 @@ public class ArticleDetailFragment extends Fragment implements
                         .getIntent(), getString(R.string.action_share)));
             }
         });
-
-        bindViews();
         updateStatusBar();
+        bindViews();
         return mRootView;
     }
 
     private void updateStatusBar() {
-        int color = 0;
-        if (mPhotoView != null && mTopInset != 0 && mScrollY > 0) {
-            float f = progress(mScrollY,
-                    mStatusBarFullOpacityBottom - mTopInset * 3,
-                    mStatusBarFullOpacityBottom - mTopInset);
-            color = Color.argb((int) (255 * f),
-                    (int) (Color.red(mMutedColor) * 0.9),
-                    (int) (Color.green(mMutedColor) * 0.9),
-                    (int) (Color.blue(mMutedColor) * 0.9));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && getActivity() != null && getActivity().getWindow() != null) {
+            getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            getActivity().getWindow().setStatusBarColor(mDarkVibrantColor);
         }
-        mStatusBarColorDrawable.setColor(color);
-        mDrawInsetsFrameLayout.setInsetBackground(mStatusBarColorDrawable);
-    }
 
-    static float progress(float v, float min, float max) {
-        return constrain((v - min) / (max - min), 0, 1);
-    }
-
-    static float constrain(float val, float min, float max) {
-        if (val < min) {
-            return min;
-        } else if (val > max) {
-            return max;
-        } else {
-            return val;
-        }
     }
 
     private void bindViews() {
@@ -205,11 +193,14 @@ public class ArticleDetailFragment extends Fragment implements
                             Bitmap bitmap = imageContainer.getBitmap();
                             if (bitmap != null) {
                                 Palette p = Palette.generate(bitmap, 12);
-                                mMutedColor = p.getDarkMutedColor(0xFF333333);
+                                mDarkVibrantColor = p.getDarkVibrantColor(p.getDarkMutedColor(0xFF333333));
+                                mVibrantColor = p.getVibrantColor(p.getMutedColor(0xFF888888));
                                 mPhotoView.setImageBitmap(imageContainer.getBitmap());
                                 mRootView.findViewById(R.id.meta_bar)
-                                        .setBackgroundColor(mMutedColor);
+                                        .setBackgroundColor(mDarkVibrantColor);
                                 updateStatusBar();
+                                fab.setBackgroundTintList(ColorStateList.valueOf(mVibrantColor));
+                                mCollapsingToolbarLayout.setContentScrimColor(mVibrantColor);
                             }
                         }
 
@@ -221,7 +212,7 @@ public class ArticleDetailFragment extends Fragment implements
         } else {
             mRootView.setVisibility(View.GONE);
             titleView.setText("N/A");
-            bylineView.setText("N/A" );
+            bylineView.setText("N/A");
             bodyView.setText("N/A");
         }
     }
