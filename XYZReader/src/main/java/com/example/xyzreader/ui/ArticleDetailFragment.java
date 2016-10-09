@@ -42,26 +42,19 @@ public class ArticleDetailFragment extends Fragment implements
         LoaderManager.LoaderCallbacks<Cursor> {
     public static final String ARG_ITEM_ID = "item_id";
     private static final String TAG = "ArticleDetailFragment";
-    private static final float PARALLAX_FACTOR = 1.25f;
 
     private Cursor mCursor;
     private long mItemId;
     private View mRootView;
     private int mDarkVibrantColor = 0xFF444444;
     private int mVibrantColor = 0xFF444444;
-    private NestedScrollView mScrollView;
     private DrawInsetsFrameLayout mDrawInsetsFrameLayout;
-    private ColorDrawable mStatusBarColorDrawable;
     private CollapsingToolbarLayout mCollapsingToolbarLayout;
-
-    private int mTopInset;
     private View mPhotoContainerView;
     private ImageView mPhotoView;
     private int mScrollY;
     private boolean mIsCard = false;
-    private int mStatusBarFullOpacityBottom;
     private FloatingActionButton fab;
-    private int id = 0;
 
     /**
      * Mandatory empty constructor for the fragment manager to instantiate the
@@ -78,19 +71,6 @@ public class ArticleDetailFragment extends Fragment implements
         return fragment;
     }
 
-    static float progress(float v, float min, float max) {
-        return constrain((v - min) / (max - min), 0, 1);
-    }
-
-    static float constrain(float val, float min, float max) {
-        if (val < min) {
-            return min;
-        } else if (val > max) {
-            return max;
-        } else {
-            return val;
-        }
-    }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -101,8 +81,6 @@ public class ArticleDetailFragment extends Fragment implements
         }
 
         mIsCard = getResources().getBoolean(R.bool.detail_is_card);
-        mStatusBarFullOpacityBottom = getResources().getDimensionPixelSize(
-                R.dimen.detail_card_top_margin);
         setHasOptionsMenu(true);
     }
 
@@ -126,16 +104,13 @@ public class ArticleDetailFragment extends Fragment implements
         mDrawInsetsFrameLayout.setOnInsetsCallback(new DrawInsetsFrameLayout.OnInsetsCallback() {
             @Override
             public void onInsetsChanged(Rect insets) {
-                mTopInset = insets.top;
             }
         });
 
-        mScrollView = (NestedScrollView) mRootView.findViewById(R.id.scrollview);
 
         mPhotoView = (ImageView) mRootView.findViewById(R.id.photo);
         mPhotoContainerView = mRootView.findViewById(R.id.photo_container);
 
-        mStatusBarColorDrawable = new ColorDrawable(0);
 
         fab = (FloatingActionButton) mRootView.findViewById(R.id.share_fab);
 
@@ -148,18 +123,10 @@ public class ArticleDetailFragment extends Fragment implements
                         .getIntent(), getString(R.string.action_share)));
             }
         });
-        updateStatusBar();
         bindViews();
         return mRootView;
     }
 
-    private void updateStatusBar() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && getActivity() != null && getActivity().getWindow() != null) {
-            getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-            getActivity().getWindow().setStatusBarColor(mDarkVibrantColor);
-        }
-
-    }
 
     private void bindViews() {
         if (mRootView == null) {
@@ -192,13 +159,12 @@ public class ArticleDetailFragment extends Fragment implements
                         public void onResponse(ImageLoader.ImageContainer imageContainer, boolean b) {
                             Bitmap bitmap = imageContainer.getBitmap();
                             if (bitmap != null) {
-                                Palette p = Palette.generate(bitmap, 12);
+                                Palette p = Palette.generate(bitmap, 24);
                                 mDarkVibrantColor = p.getDarkVibrantColor(p.getDarkMutedColor(0xFF333333));
                                 mVibrantColor = p.getVibrantColor(p.getMutedColor(0xFF888888));
                                 mPhotoView.setImageBitmap(imageContainer.getBitmap());
                                 mRootView.findViewById(R.id.meta_bar)
                                         .setBackgroundColor(mDarkVibrantColor);
-                                updateStatusBar();
                                 fab.setBackgroundTintList(ColorStateList.valueOf(mVibrantColor));
                                 mCollapsingToolbarLayout.setContentScrimColor(mVibrantColor);
                             }
